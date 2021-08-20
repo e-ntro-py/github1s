@@ -16,30 +16,19 @@ export const showSourcegraphSearchMessage = (() => {
 		alreadyShown = true;
 		const { owner, repo, ref } = await router.getState();
 		const url = `https://sourcegraph.com/github.com/${owner}/${repo}@${ref}`;
-		vscode.window.showInformationMessage(
-			`The code search ability is powered by [Sourcegraph](${url})`
-		);
+		vscode.window.showInformationMessage(`The code search ability is powered by [Sourcegraph](${url})`);
 	};
 })();
 
 export const showSourcegraphSymbolMessage = (() => {
 	let alreadyShown = false;
-	return async (
-		owner: string,
-		repo: string,
-		ref: string,
-		path: string,
-		line: number,
-		character: number
-	) => {
+	return async (owner: string, repo: string, ref: string, path: string, line: number, character: number) => {
 		if (alreadyShown) {
 			return;
 		}
 		alreadyShown = true;
 		const url = getSourcegraphUrl(owner, repo, ref, path, line, character);
-		vscode.window.showInformationMessage(
-			`The results is provided by [Sourcegraph](${url})`
-		);
+		vscode.window.showInformationMessage(`The results is provided by [Sourcegraph](${url})`);
 	};
 })();
 

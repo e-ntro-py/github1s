@@ -3,6 +3,7 @@
  * @author netcon
  */
 
+import * as vscode from 'vscode';
 import { PlatformAdapter } from 'github1s';
 
 export class PlatformAdapterManager {
@@ -27,8 +28,19 @@ export class PlatformAdapterManager {
 		return Array.from(this.adaptersMap.values());
 	}
 
-	public getAdapter(schema: string): PlatformAdapter | null {
-		return this.adaptersMap.get(schema) || null;
+	public getAdapter(schema: string): PlatformAdapter {
+		if (this.adaptersMap.has(schema)) {
+			throw new Error(`Adapter with schema '${schema}' can not found.`);
+		}
+		return this.adaptersMap.get(schema);
+	}
+
+	public getCurrentAdapter(): PlatformAdapter {
+		if (!vscode.workspace.workspaceFolders.length) {
+			throw new Error(`Can not found active workspace`);
+		}
+		const schema = vscode.workspace.workspaceFolders[0].uri.scheme;
+		return this.getAdapter(schema);
 	}
 }
 

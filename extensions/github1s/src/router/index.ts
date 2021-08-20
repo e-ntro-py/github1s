@@ -4,20 +4,15 @@
  */
 
 import * as vscode from 'vscode';
+import * as github1s from 'github1s';
 import { History, createMemoryHistory } from 'history';
 import platformAdapterManager from '@/adapters/manager';
-import { Barrier } from '@/helpers/async';
-import { parseGitHubUrl } from './parser';
-import { EventEmitter } from './events';
-import { RouterState } from './types';
 
-export class Router extends EventEmitter<RouterState> {
+export class Router {
 	private static instance: Router;
 
-	private readyBarrier = new Barrier();
-	private _previousStatePromise: Promise<RouterState>;
-	private _currentStatePromise: Promise<RouterState>;
-	public history: History = createMemoryHistory();
+	private _state: github1s.RouterState = null;
+	private _history: History = createMemoryHistory();
 
 	public static getInstance() {
 		if (Router.instance) {
@@ -28,43 +23,41 @@ export class Router extends EventEmitter<RouterState> {
 
 	// we should ensure the router has been initialized at first!
 	async initialize(browserUrl: string) {
-		const schema = vscode.workspace.workspaceFolders.length
-			? vscode.workspace.workspaceFolders[0].uri.scheme
-			: 'UNKNOWN';
+		const routerParser = await platformAdapterManager.getCurrentAdapter().resolveRouterParser();
+		const { path: pathname, query, fragment } = vscode.Uri.parse(browserUrl);
+		const path = pathname + (query ? `?${query}` : '') + (fragment ? `#${fragment}` : '');
 
-		const { path, query, fragment } = vscode.Uri.parse(browserUrl);
-		const targetPath = path + (query ? `?${query}` : '') + (fragment ? `#${fragment}` : '');
-		this.history.replace(targetPath);
-		this._currentStatePromise = parseGitHubUrl(targetPath);
-		this._previousStatePromise = this._currentStatePromise;
-		this.readyBarrier.open();
+		this._history.replace(path);
+		this._state = await routerParser.parsePath(path);
 
-		this.history.listen(async ({ location }) => {
+		this._history.listen(async ({ location }) => {
+			const prevState = this._state;
 			const targetPath = `${location.pathname}${location.search}${location.hash}`;
-			this._previousStatePromise = this._currentStatePromise;
-			this._currentStatePromise = parseGitHubUrl(targetPath);
+			const routerParser = await platformAdapterManager.getCurrentAdapter().resolveRouterParser();
+			this._state = await routerParser.parsePath(targetPath);
 
 			// sync path to browser
 			vscode.commands.executeCommand('github1s.vscode.replace-browser-url', targetPath);
-			this.notifyListeners(await this._previousStatePromise, await this._currentStatePromise);
 		});
 	}
 
 	// get the routerState for current url
-	public async getState(): Promise<RouterState> {
-		return this.readyBarrier.wait().then(() => this._currentStatePromise);
+	public getState(): github1s.RouterState {
+		return this._state;
 	}
 
 	// compute the file URI authority of current routerState
-	public async getAuthority(): Promise<string> {
-		return this.getState().then(({ owner, repo, ref }) => {
-			return `${owner}+${repo}+${ref}`;
-		});
+	public getAuthority(): string {
+		return `${this._state.repo}+${this._state.ref}`;
+	}
+
+	public push(path: string) {
+		return this._history.push(path);
 	}
 
 	// replace the url of the history
-	public async replace(path: string) {
-		return this.history.replace(path);
+	public replace(path: string) {
+		return this._history.replace(path);
 	}
 }
 
